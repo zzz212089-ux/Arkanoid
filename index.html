@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>打磚塊</title>
+    <!-- 引入 Google Fonts 懷舊街機像素字體 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        body {
+            /* 柔和紓壓的自然寧靜薄荷藍綠與暮光石板漸層 */
+            background-color: #2b3a4a;
+            background-image: radial-gradient(circle at center top, #36485c 0%, #202d3a 100%);
+            color: #e2e8f0;
+            font-family: 'Press Start 2P', monospace, sans-serif;
+        }
+        /* 柔和無刺眼的細膩環境光微光 */
+        .ambient-overlay {
+            background: radial-gradient(circle at 50% 30%, rgba(136, 216, 208, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
+            pointer-events: none;
+        }
+        /* 溫潤紓壓圓角按鈕 */
+        .calm-btn {
+            box-shadow: 0 4px 0 #1e2c38, 0 4px 14px rgba(94, 186, 175, 0.25);
+            transition: all 0.12s ease;
+        }
+        .calm-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #1e2c38, 0 2px 8px rgba(94, 186, 175, 0.35);
+        }
+        /* 浮動提示燈號 (柔和粉彩色系) */
+        .buff-badge {
+            font-size: 9px;
+            padding: 3px 8px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            animation: calmPulse 1.8s infinite alternate ease-in-out;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        @keyframes calmPulse {
+            0% { opacity: 0.9; transform: scale(0.98); }
+            100% { opacity: 1; transform: scale(1.02); }
+        }
+        /* 快要結束前 3.5 秒一閃一閃預警提醒 */
+        .buff-warning {
+            animation: calmBlinkWarning 0.4s steps(2, start) infinite !important;
+        }
+        @keyframes calmBlinkWarning {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+        /* 歸零前 1.2 秒急促閃爍 */
+        .buff-fadeout {
+            animation: calmBlinkDanger 0.12s steps(2, start) infinite !important;
+        }
+        @keyframes calmBlinkDanger {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col items-center justify-between p-1 md:p-2 bg-[#2b3a4a] overflow-hidden">
+
+    <!-- 頂部資訊看板 (沉靜柔和圓潤卡片) -->
+    <header class="w-full max-w-[1120px] flex-none flex justify-between items-center bg-[#253342]/90 border-2 border-[#6ee7b7]/60 p-2 md:p-2.5 rounded-xl shadow-[0_4px_20px_rgba(30,41,59,0.3)] text-xs md:text-sm mb-0.5 backdrop-blur-sm">
+        <div class="flex flex-col gap-1">
+            <span class="text-[#fca5a5] tracking-widest text-[10px] md:text-xs">分數 SCORE</span>
+            <span id="scoreText" class="text-[#fef08a] text-sm md:text-base drop-shadow-[0_1px_4px_rgba(254,240,138,0.3)]">00000</span>
+        </div>
+        <div class="flex flex-col items-center gap-1">
+            <span class="text-[#6ee7b7] tracking-widest text-[10px] md:text-xs">關卡 STAGE</span>
+            <span id="stageText" class="text-white text-sm md:text-base">01</span>
+        </div>
+        <div class="flex flex-col items-end gap-1">
+            <span class="text-[#93c5fd] tracking-widest text-[10px] md:text-xs">生命 LIVES</span>
+            <div id="livesContainer" class="flex gap-1 text-rose-400 text-sm md:text-base">
+                ❤️❤️❤️
+            </div>
+        </div>
+    </header>
+
+    <!-- 活躍 Buff 狀態顯示條 -->
+    <div id="activeBuffsContainer" class="w-full max-w-[1120px] flex-none h-6 flex gap-2 items-center px-1 overflow-x-auto my-0">
+        <!-- 動態注入啟用的 Buff 提示 -->
+    </div>
+
+    <!-- 遊戲主畫布與療癒氛圍容器 -->
+    <main class="relative w-full max-w-[1120px] flex-1 flex items-center justify-center -mt-1 mb-1 min-h-0">
+        <div class="relative w-[800px] h-[600px] max-w-full max-h-full aspect-[4/3] flex items-center justify-center">
+            <canvas id="gameCanvas" width="800" height="600" class="max-w-full max-h-full block bg-[#202d3a] rounded-2xl shadow-[0_8px_32px_rgba(15,23,42,0.4)] object-contain"></canvas>
+            <div class="ambient-overlay absolute inset-0 rounded-2xl pointer-events-none"></div>
+
+            <!-- 開始 / 暫停 / 結算 彈出面板 (柔和半透明水波石板風) -->
+            <div id="modalOverlay" class="absolute inset-0 bg-[#1e293b]/90 flex flex-col items-center justify-center p-6 text-center z-20 rounded-2xl border-2 border-[#6ee7b7]/30 backdrop-blur-md">
+                <h1 id="modalTitle" class="text-2xl md:text-4xl text-[#6ee7b7] mb-4 drop-shadow-[0_2px_10px_rgba(110,231,183,0.4)] leading-relaxed">
+                    BREAKOUT
+                </h1>
+                <p id="modalDesc" class="text-xs md:text-sm text-slate-200 mb-6 leading-7 max-w-[500px]">
+                    移動擋板反彈小球，在舒緩沉靜的節奏中消除磚塊。<br>
+                    收集掉落的紓壓膠囊獲得能力提升。<br>
+                    輕按空白鍵或點擊螢幕即可發射小球。
+                </p>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button id="modalActionBtn" class="calm-btn bg-[#6ee7b7] hover:bg-[#86efac] text-[#134e4a] font-bold px-6 py-3 rounded-xl text-xs md:text-sm cursor-pointer">
+                        開始遊戲 (START)
+                    </button>
+                    <button id="soundToggleBtn" class="bg-[#334155] hover:bg-[#475569] border border-[#6ee7b7]/60 text-[#a7f3d0] font-bold px-4 py-3 rounded-xl text-xs cursor-pointer transition">
+                        🔊 音效: 開啟
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 底部控制列 -->
+    <footer class="w-full max-w-[1120px] flex-none flex flex-col items-center gap-1 py-0.5">
+        <div class="hidden sm:flex justify-between w-full text-[10px] text-teal-200/80 px-2">
+            <span>[滑鼠/觸控滑動] 輕鬆移動擋板</span>
+            <span>[空白鍵 / 點擊] 發射小球</span>
+            <span>[P] 暫停遊戲</span>
+        </div>
+
+        <!-- 行動裝置按鈕列 -->
+        <div class="flex sm:hidden justify-between w-full gap-2 px-1">
+            <button id="mobileLeftBtn" class="flex-1 bg-[#334155] active:bg-[#475569] border border-teal-300/30 text-teal-100 py-2.5 rounded-xl text-xs shadow">
+                ◀ 向左
+            </button>
+            <button id="mobileLaunchBtn" class="flex-1 bg-[#f472b6] active:bg-[#f43f5e] border border-pink-200 text-white font-bold py-2.5 rounded-xl text-xs shadow">
+                ⚡ 發射
+            </button>
+            <button id="mobileRightBtn" class="flex-1 bg-[#334155] active:bg-[#475569] border border-teal-300/30 text-teal-100 py-2.5 rounded-xl text-xs shadow">
+                向右 ▶
+            </button>
+        </div>
+
+        <!-- 柔和紓壓暫停按鍵 -->
+        <div class="w-full flex justify-center my-0.5">
+            <button id="pauseGameBtn" class="calm-btn bg-[#293545] hover:bg-[#344357] active:bg-[#40526b] border border-[#6ee7b7]/70 text-[#6ee7b7] px-6 py-2 rounded-xl text-[11px] tracking-wider cursor-pointer flex items-center gap-2">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-[#6ee7b7] shadow-[0_0_6px_#6ee7b7]"></span>
+                <span id="pauseBtnLabel">PAUSE / 暫停</span>
+            </button>
+        </div>
+    </footer>
+
+    <script>
+        // 舒緩溫潤的音效系統 (使用更柔和的微正弦波與溫暖三角波，低刺激更放鬆)
+        const AudioSys = {
+            ctx: null,
+            enabled: true,
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+            playSoftTone(freq, type = 'sine', duration = 0.08, vol = 0.12) {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0008, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {}
+            },
+            paddleHit() { this.playSoftTone(340, 'sine', 0.08, 0.15); },
+            brickHit(strength = 1) { 
+                const freq = 440 + (strength * 80);
+                this.playSoftTone(freq, 'triangle', 0.1, 0.14); 
+            },
+            metalHit() {
+                this.playSoftTone(680, 'sine', 0.06, 0.12);
+            },
+            buffExpire() {
+                this.playSoftTone(260, 'sine', 0.14, 0.09);
+            },
+            powerupSpawn() { this.playSoftTone(520, 'triangle', 0.1, 0.1); },
+            powerupCollect() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const now = this.ctx.currentTime;
+                    // 清新溫潤的和弦音 (木琴/清脆鈴聲感)
+                    [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, now + i * 0.05);
+                        gain.gain.setValueAtTime(0.12, now + i * 0.05);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.12);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(now + i * 0.05);
+                        osc.stop(now + i * 0.05 + 0.13);
+                    });
+                } catch(e) {}
+            },
+            loseLife() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(280, now);
+                    osc.frequency.exponentialRampToValueAtTime(140, now + 0.35);
+                    gain.gain.setValueAtTime(0.16, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.35);
+                } catch(e) {}
+            },
+            stageClear() {
+                if (!this.enabled) return;
+                try {
+                    this.init();
+                    const notes = [440, 554, 659, 880];
+                    notes.forEach((f, idx) => {
+                        setTimeout(() => this.playSoftTone(f, 'sine', 0.18, 0.15), idx * 110);
+                    });
+                } catch(e){}
+            }
+        };
+
+        // 柔和自然粉彩色系道具定義
+        const BUFF_TYPES = {
+            MULTIBALL: {
+                id: 'MULTIBALL',
+                name: '增加一球',
+                color: '#6ee7b7', // 療癒薄荷綠
+                textColor: '#064e3b',
+                char: '+1',
+                baseDuration: 0,
+                apply(game) {
+                    const refBall = game.balls[0] || {
+                        x: game.paddle.x + game.paddle.width / 2,
+                        y: game.paddle.y - 10,
+                        speed: game.baseSpeed,
+                        isFireball: false
+                    };
+                    const randomAngle = -Math.PI / 2 + (Math.random() * 0.7 - 0.35);
+                    const speed = refBall.speed || game.baseSpeed;
+
+                    game.balls.push({
+                        x: refBall.x,
+                        y: refBall.y,
+                        radius: 7,
+                        vx: Math.cos(randomAngle) * speed,
+                        vy: Math.sin(randomAngle) * speed,
+                        speed: speed,
+                        isStuck: false,
+                        isFireball: refBall.isFireball || false
+                    });
+                }
+            },
+            EXPAND: {
+                id: 'EXPAND',
+                name: '板身放大',
+                color: '#7dd3fc', // 沉靜天空天藍
+                textColor: '#0c4a6e',
+                char: 'E',
+                baseDuration: 10,
+                apply(game) {
+                    if (game.activeBuffs['SHRINK']) {
+                        delete game.activeBuffs['SHRINK'];
+                    }
+                    game.paddle.width = Math.min(game.paddle.baseWidth * 1.5, 220);
+                },
+                remove(game) {
+                    game.paddle.width = game.paddle.baseWidth;
+                }
+            },
+            SHRINK: {
+                id: 'SHRINK',
+                name: '板身縮小',
+                color: '#f472b6', // 柔美草莓粉
+                textColor: '#831843',
+                char: 'S',
+                baseDuration: 8,
+                apply(game) {
+                    if (game.activeBuffs['EXPAND']) {
+                        delete game.activeBuffs['EXPAND'];
+                    }
+                    game.paddle.width = Math.max(game.paddle.baseWidth * 0.65, 45);
+                },
+                remove(game) {
+                    game.paddle.width = game.paddle.baseWidth;
+                }
+            },
+            THRU: {
+                id: 'THRU',
+                name: '貫穿磚塊',
+                color: '#fdba74', // 溫暖杏仁奶橙
+                textColor: '#7c2d12',
+                char: 'T',
+                baseDuration: 8,
+                apply(game) {
+                    game.balls.forEach(b => b.isFireball = true);
+                },
+                remove(game) {
+                    game.balls.forEach(b => b.isFireball = false);
+                }
+            }
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const V_WIDTH = 800;
+        const V_HEIGHT = 600;
+
+        const Game = {
+            state: 'START',
+            score: 0,
+            stage: 1,
+            maxStages: 5,
+            lives: 3,
+            baseSpeed: 5.6,
+            WALL_THICKNESS: 24,
+            WALL_LEFT: 24,
+            WALL_RIGHT: 776,
+            WALL_TOP: 24,
+            
+            paddle: {
+                x: 350,
+                y: 550,
+                width: 96,
+                baseWidth: 96,
+                height: 14,
+                speed: 8.5,
+                moveLeft: false,
+                moveRight: false
+            },
+            balls: [],
+            bricks: [],
+            capsules: [],
+            particles: [],
+            activeBuffs: {},
+            stageDrops: 0,
+            bricksBrokenThisStage: 0,
+
+            resize() {
+                canvas.width = V_WIDTH;
+                canvas.height = V_HEIGHT;
+            },
+
+            generateBricks(stage) {
+                this.bricks = [];
+                const brickWidth = 58;
+                const brickHeight = 17;
+                const padding = 7;
+                const cols = 10;
+                const offsetX = (V_WIDTH - (cols * (brickWidth + padding) - padding)) / 2;
+                const offsetY = 72;
+
+                // 舒壓統一色調配置：
+                const CALM_NORMAL_COLOR = '#5bbdb2';    // 普通磚：鼠尾草薄荷青
+                const CALM_TOUGH_COLOR = '#a78bfa';     // 耐打磚：溫潤薰衣草紫丁香
+                const CALM_DARK_SLATE = '#3b4859';      // 不壞磚：鵝卵石深板岩灰
+
+                // 輔助函式：快速新增磚塊
+                const addBrick = (col, row, type = 'normal', hp = 1) => {
+                    const posX = offsetX + col * (brickWidth + padding);
+                    const posY = offsetY + row * (brickHeight + padding);
+                    
+                    if (type === 'gold') {
+                        this.bricks.push({
+                            x: posX,
+                            y: posY,
+                            width: brickWidth,
+                            height: brickHeight,
+                            type: 'gold',
+                            maxHp: Infinity,
+                            hp: Infinity,
+                            color: CALM_DARK_SLATE,
+                            points: 0
+                        });
+                    } else if (type === 'silver') {
+                        this.bricks.push({
+                            x: posX,
+                            y: posY,
+                            width: brickWidth,
+                            height: brickHeight,
+                            type: 'silver',
+                            maxHp: hp,
+                            hp: hp,
+                            color: CALM_TOUGH_COLOR,
+                            points: 40 * stage
+                        });
+                    } else {
+                        this.bricks.push({
+                            x: posX,
+                            y: posY,
+                            width: brickWidth,
+                            height: brickHeight,
+                            type: 'normal',
+                            maxHp: 1,
+                            hp: 1,
+                            color: CALM_NORMAL_COLOR,
+                            points: 15 * stage
+                        });
+                    }
+                };
+
+                // 關卡 1：【層疊梯田 (The Terraces)】
+                // 經典柔和開場，階梯波浪弧形，無阻擋不壞磚，中央有開闊開口可鑽入後方
+                if (stage === 1) {
+                    for (let r = 0; r < 5; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            // 兩側漸層下凹的階梯梯田造形
+                            if ((r === 0 && (c === 0 || c === 9)) ||
+                                (r === 1 && (c <= 1 || c >= 8)) ||
+                                (r === 4 && (c === 4 || c === 5))) {
+                                continue;
+                            }
+                            addBrick(c, r, 'normal', 1);
+                        }
+                    }
+                }
+                // 關卡 2：【雙塔堡壘 (Twin Bastions)】
+                // 兩側高聳的深色石板護衛柱，中間為拱形大門，內含2層敲擊的薰衣草紫丁香磚
+                else if (stage === 2) {
+                    for (let r = 0; r < 7; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            // 左右雙塔立柱 (第2與第7欄是堅固的金屬深色基石)
+                            if ((c === 1 || c === 8) && (r >= 1 && r <= 4)) {
+                                addBrick(c, r, 'gold');
+                            }
+                            // 堡壘核心金字門廊 (多次耐打磚)
+                            else if ((c >= 3 && c <= 6) && (r === 0 || r === 1)) {
+                                addBrick(c, r, 'silver', 2);
+                            }
+                            // 左右翼樓與外圍普通磚
+                            else if ((c === 0 || c === 9) && (r >= 2 && r <= 5)) {
+                                addBrick(c, r, 'normal', 1);
+                            }
+                            // 中央迎風前哨磚
+                            else if ((c === 4 || c === 5) && r === 4) {
+                                addBrick(c, r, 'normal', 1);
+                            }
+                            else if ((c === 2 || c === 7) && (r === 0 || r === 5)) {
+                                addBrick(c, r, 'normal', 1);
+                            }
+                            else if (r === 2 && (c === 3 || c === 6)) {
+                                addBrick(c, r, 'normal', 1);
+                            }
+                        }
+                    }
+                }
+                // 關卡 3：【同心星環 (Concentric Ring)】
+                // 菱形同心圓佈局，中央有1顆極度堅固的板岩石樞紐，外圍星環可順暢旋轉反彈
+                else if (stage === 3) {
+                    for (let r = 0; r < 8; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const dist = Math.abs(c - 4.5) + Math.abs(r - 3.5);
+                            // 最核心：中央深板岩石柱
+                            if (dist < 1.2) {
+                                addBrick(c, r, 'gold');
+                            }
+                            // 內圈星核：3次耐打紫磚
+                            else if (dist >= 1.5 && dist <= 2.6) {
+                                addBrick(c, r, 'silver', 3);
+                            }
+                            // 外圈護環：普通薄荷青磚
+                            else if (dist >= 3.2 && dist <= 4.8) {
+                                addBrick(c, r, 'normal', 1);
+                            }
+                            // 外角裝飾小浮石
+                            else if ((r === 0 || r === 7) && (c === 1 || c === 8)) {
+                                addBrick(c, r, 'normal', 1);
+                            }
+                        }
+                    }
+                }
+                // 關卡 4：【石板迴廊迷宮 (The Slate Labyrinth)】
+                // 縱橫交錯的迷宮擋板通道，小球可藉由走廊滑入頂部「回音天井」，享受瘋狂連擊
+                else if (stage === 4) {
+                    for (let r = 0; r < 8; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            // 迷宮引導深色橫條與立柱
+                            if ((r === 2 && (c >= 1 && c <= 3)) || (r === 5 && (c >= 6 && c <= 8))) {
+                                addBrick(c, r, 'gold');
+                            }
+                            else if ((c === 5) && (r >= 1 && r <= 3)) {
+                                addBrick(c, r, 'gold');
+                            }
+                            // 迷宮核心寶藏守衛 (3次耐打銀磚)
+                            else if (r === 0 && (c % 2 === 0)) {
+                                addBrick(c, r, 'silver', 3);
+                            }
+                            else if ((r === 3 || r === 4) && (c === 2 || c === 7)) {
+                                addBrick(c, r, 'silver', 2);
+                            }
+                            // 迷宮填充磚塊
+                            else if ((r + c) % 2 === 0 && r < 7) {
+                                addBrick(c, r, 'normal', 1);
+                            }
+                        }
+                    }
+                }
+                // 關卡 5：【大師神殿·聖堂金字塔 (The Sanctuary Pyramid)】
+                // 宏偉壯麗的梯形金字塔神殿，內部有中空密室，底部有重重防護基座
+                else if (stage >= 5) {
+                    for (let r = 0; r < 9; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            // 金字塔尖頂核心護衛（高耐久 3次）
+                            if (r === 0 && (c === 4 || c === 5)) {
+                                addBrick(c, r, 'silver', 3);
+                            }
+                            else if (r === 1 && (c >= 3 && c <= 6)) {
+                                addBrick(c, r, 'silver', 2);
+                            }
+                            // 神殿中層金屬支撐樑柱
+                            else if (r === 4 && (c === 1 || c === 4 || c === 5 || c === 8)) {
+                                addBrick(c, r, 'gold');
+                            }
+                            // 神殿內部中空密室（保留空隙）
+                            else if ((r === 2 || r === 3) && (c >= 3 && c <= 6)) {
+                                continue; // 密室空腔，球打進去後會來回瘋狂反彈
+                            }
+                            // 金字塔基座與外梯
+                            else if (r >= 2 && r <= 7 && (c >= 4 - r && c <= 5 + r)) {
+                                if (r === 7) {
+                                    addBrick(c, r, (c % 2 === 0) ? 'silver' : 'normal', 2);
+                                } else {
+                                    addBrick(c, r, 'normal', 1);
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
+            getRemainingDestructibleBricksCount() {
+                return this.bricks.filter(b => b.type !== 'gold' && b.hp > 0).length;
+            },
+
+            resetPaddleAndBall() {
+                this.paddle.baseWidth = Math.max(76, 96 - (this.stage - 1) * 4);
+                this.paddle.width = this.paddle.baseWidth;
+                this.paddle.x = (V_WIDTH - this.paddle.width) / 2;
+
+                for (let buffKey in this.activeBuffs) {
+                    if (BUFF_TYPES[buffKey]?.remove) {
+                        BUFF_TYPES[buffKey].remove(this);
+                    }
+                }
+                this.activeBuffs = {};
+                this.capsules = [];
+                this.renderBuffBadges();
+
+                const currentStageSpeed = this.baseSpeed + (this.stage - 1) * 0.35;
+                this.balls = [{
+                    x: this.paddle.x + this.paddle.width / 2,
+                    y: this.paddle.y - 8,
+                    radius: 7,
+                    vx: 0,
+                    vy: 0,
+                    speed: currentStageSpeed,
+                    isStuck: true,
+                    stuckOffset: this.paddle.width / 2,
+                    isFireball: false
+                }];
+            },
+
+            launchStuckBall(ball) {
+                if (!ball.isStuck) return;
+                ball.isStuck = false;
+                const hitOffset = (ball.stuckOffset / this.paddle.width) - 0.5;
+                const launchAngle = -Math.PI / 2 + (hitOffset * Math.PI / 4);
+                ball.vx = Math.cos(launchAngle) * ball.speed;
+                ball.vy = Math.sin(launchAngle) * ball.speed;
+                AudioSys.paddleHit();
+            },
+
+            launchAllStuck() {
+                this.balls.forEach(b => {
+                    if (b.isStuck) this.launchStuckBall(b);
+                });
+            },
+
+            spawnCapsule(x, y) {
+                this.bricksBrokenThisStage++;
+                const remainingDestructible = this.getRemainingDestructibleBricksCount();
+                // 規則：最後一塊可破壞磚塊絕不掉落道具
+                if (remainingDestructible <= 1) {
+                    return;
+                }
+
+                // 關卡保底掉落機制 (確保每一關都必定有道具掉落)：
+                // 1. 若該關尚未掉落任何道具，且擊碎達 3 塊磚，必定 100% 掉落
+                // 2. 若該關掉落未滿 2 個，且擊碎達 9 塊磚，必定 100% 掉落
+                // 3. 其他時候維持約 15% 機率隨機掉落
+                let shouldDrop = false;
+                if (this.stageDrops === 0 && this.bricksBrokenThisStage >= 3) {
+                    shouldDrop = true;
+                } else if (this.stageDrops < 2 && this.bricksBrokenThisStage >= 9) {
+                    shouldDrop = true;
+                } else if (Math.random() <= 0.15) {
+                    shouldDrop = true;
+                }
+
+                if (!shouldDrop) return;
+
+                this.stageDrops++;
+
+                const keys = ['MULTIBALL', 'EXPAND', 'SHRINK', 'THRU'];
+                const chosenType = BUFF_TYPES[keys[Math.floor(Math.random() * keys.length)]];
+
+                this.capsules.push({
+                    x: x,
+                    y: y,
+                    width: 28,
+                    height: 14,
+                    vy: 2.3,
+                    type: chosenType
+                });
+                AudioSys.powerupSpawn();
+            },
+
+            createExplosion(x, y, color, count = 10) {
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const spd = Math.random() * 3.5 + 0.8;
+                    this.particles.push({
+                        x: x,
+                        y: y,
+                        vx: Math.cos(angle) * spd,
+                        vy: Math.sin(angle) * spd,
+                        size: Math.random() * 2.5 + 2,
+                        color: color,
+                        alpha: 0.9,
+                        decay: Math.random() * 0.025 + 0.02
+                    });
+                }
+            },
+
+            applyBuff(buff) {
+                AudioSys.powerupCollect();
+                this.score += 50;
+                this.updateScoreUI();
+
+                buff.apply(this);
+
+                if (buff.baseDuration > 0) {
+                    this.activeBuffs[buff.id] = buff.baseDuration;
+                }
+                this.renderBuffBadges();
+            },
+
+            renderBuffBadges() {
+                const container = document.getElementById('activeBuffsContainer');
+                
+                const existingElements = container.querySelectorAll('[data-buff-id]');
+                existingElements.forEach(el => {
+                    const id = el.getAttribute('data-buff-id');
+                    if (!this.activeBuffs[id]) {
+                        el.remove();
+                    }
+                });
+
+                for (const [id, time] of Object.entries(this.activeBuffs)) {
+                    const buff = BUFF_TYPES[id];
+                    if (!buff) continue;
+                    
+                    let badge = container.querySelector(`[data-buff-id="${id}"]`);
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.setAttribute('data-buff-id', id);
+                        badge.className = 'buff-badge font-bold';
+                        badge.style.backgroundColor = buff.color;
+                        badge.style.color = buff.textColor || '#0f172a';
+                        badge.innerHTML = `<span class="buff-name">${buff.name}</span><span class="buff-time opacity-90 font-mono"></span>`;
+                        container.appendChild(badge);
+                    }
+
+                    const timeSpan = badge.querySelector('.buff-time');
+                    if (timeSpan) {
+                        timeSpan.textContent = `${Math.ceil(Math.max(0, time))}s`;
+                    }
+
+                    if (time <= 1.2) {
+                        badge.classList.remove('buff-warning');
+                        badge.classList.add('buff-fadeout');
+                    } else if (time <= 3.5) {
+                        badge.classList.remove('buff-fadeout');
+                        badge.classList.add('buff-warning');
+                    } else {
+                        badge.classList.remove('buff-warning', 'buff-fadeout');
+                    }
+                }
+            },
+
+            updateScoreUI() {
+                document.getElementById('scoreText').innerText = String(this.score).padStart(5, '0');
+            },
+
+            updateLivesUI() {
+                const container = document.getElementById('livesContainer');
+                container.innerHTML = '❤️❤️❤️'.slice(0, this.lives * 2);
+            },
+
+            update(delta) {
+                if (this.state !== 'PLAYING') return;
+
+                if (this.paddle.moveLeft) {
+                    this.paddle.x = Math.max(this.WALL_LEFT + 2, this.paddle.x - this.paddle.speed);
+                }
+                if (this.paddle.moveRight) {
+                    this.paddle.x = Math.min(this.WALL_RIGHT - this.paddle.width - 2, this.paddle.x + this.paddle.speed);
+                }
+
+                let hasBuffUpdates = false;
+                for (const [id, timeLeft] of Object.entries(this.activeBuffs)) {
+                    hasBuffUpdates = true;
+                    this.activeBuffs[id] -= delta;
+                    if (this.activeBuffs[id] <= 0) {
+                        if (BUFF_TYPES[id]?.remove) {
+                            BUFF_TYPES[id].remove(this);
+                        }
+                        delete this.activeBuffs[id];
+                        AudioSys.buffExpire();
+                    }
+                }
+                if (hasBuffUpdates) {
+                    this.renderBuffBadges();
+                }
+
+                for (let i = this.capsules.length - 1; i >= 0; i--) {
+                    const cap = this.capsules[i];
+                    cap.y += cap.vy;
+
+                    if (
+                        cap.y + cap.height >= this.paddle.y &&
+                        cap.y <= this.paddle.y + this.paddle.height &&
+                        cap.x + cap.width >= this.paddle.x &&
+                        cap.x <= this.paddle.x + this.paddle.width
+                    ) {
+                        this.applyBuff(cap.type);
+                        this.createExplosion(cap.x + cap.width / 2, cap.y, cap.type.color, 8);
+                        this.capsules.splice(i, 1);
+                        continue;
+                    }
+
+                    if (cap.y > V_HEIGHT) {
+                        this.capsules.splice(i, 1);
+                    }
+                }
+
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.alpha -= p.decay;
+                    if (p.alpha <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+
+                for (let i = this.balls.length - 1; i >= 0; i--) {
+                    const b = this.balls[i];
+
+                    if (b.isStuck) {
+                        b.x = this.paddle.x + b.stuckOffset;
+                        b.y = this.paddle.y - b.radius;
+                        continue;
+                    }
+
+                    b.x += b.vx;
+                    b.y += b.vy;
+
+                    // 左右界線牆反彈檢測
+                    if (b.x - b.radius <= this.WALL_LEFT) {
+                        b.x = this.WALL_LEFT + b.radius;
+                        b.vx = Math.abs(b.vx);
+                        AudioSys.paddleHit();
+                        this.createExplosion(this.WALL_LEFT, b.y, '#6ee7b7', 4);
+                    } else if (b.x + b.radius >= this.WALL_RIGHT) {
+                        b.x = this.WALL_RIGHT - b.radius;
+                        b.vx = -Math.abs(b.vx);
+                        AudioSys.paddleHit();
+                        this.createExplosion(this.WALL_RIGHT, b.y, '#6ee7b7', 4);
+                    }
+
+                    // 頂部界線牆反彈檢測
+                    if (b.y - b.radius <= this.WALL_TOP) {
+                        b.y = this.WALL_TOP + b.radius;
+                        b.vy = Math.abs(b.vy);
+                        AudioSys.paddleHit();
+                        this.createExplosion(b.x, this.WALL_TOP, '#6ee7b7', 4);
+                    }
+
+                    if (
+                        b.y + b.radius >= this.paddle.y &&
+                        b.y - b.radius <= this.paddle.y + this.paddle.height &&
+                        b.x >= this.paddle.x - 4 &&
+                        b.x <= this.paddle.x + this.paddle.width + 4 &&
+                        b.vy > 0
+                    ) {
+                        const hitPoint = (b.x - (this.paddle.x + this.paddle.width / 2)) / (this.paddle.width / 2);
+                        const clampedHit = Math.max(-0.9, Math.min(0.9, hitPoint));
+                        const maxBounceAngle = Math.PI * 0.42;
+                        const bounceAngle = clampedHit * maxBounceAngle - Math.PI / 2;
+
+                        const currentSpeed = Math.hypot(b.vx, b.vy);
+                        b.vx = Math.cos(bounceAngle) * currentSpeed;
+                        b.vy = Math.sin(bounceAngle) * currentSpeed;
+                        b.y = this.paddle.y - b.radius;
+                        AudioSys.paddleHit();
+                    }
+
+                    for (let j = this.bricks.length - 1; j >= 0; j--) {
+                        const br = this.bricks[j];
+                        if (
+                            b.x + b.radius >= br.x &&
+                            b.x - b.radius <= br.x + br.width &&
+                            b.y + b.radius >= br.y &&
+                            b.y - b.radius <= br.y + br.height
+                        ) {
+                            if (br.type === 'gold') {
+                                AudioSys.metalHit();
+                                this.createExplosion(b.x, b.y, '#64748b', 6);
+
+                                const prevX = b.x - b.vx;
+                                if (prevX + b.radius <= br.x || prevX - b.radius >= br.x + br.width) {
+                                    b.vx = -b.vx;
+                                } else {
+                                    b.vy = -b.vy;
+                                }
+                                break;
+                            }
+
+                            br.hp--;
+                            this.score += br.points;
+                            this.updateScoreUI();
+
+                            if (br.hp <= 0) {
+                                AudioSys.brickHit(2);
+                                this.createExplosion(br.x + br.width / 2, br.y + br.height / 2, br.color, 10);
+                                this.spawnCapsule(br.x + br.width / 2 - 14, br.y + br.height / 2);
+                                this.bricks.splice(j, 1);
+                            } else {
+                                AudioSys.brickHit(1);
+                                this.createExplosion(b.x, b.y, '#c4b5fd', 5);
+                            }
+
+                            if (!b.isFireball) {
+                                const prevX = b.x - b.vx;
+                                if (prevX + b.radius <= br.x || prevX - b.radius >= br.x + br.width) {
+                                    b.vx = -b.vx;
+                                } else {
+                                    b.vy = -b.vy;
+                                }
+                                break;
+                            }
+                        }
+                    }
+
+                    if (b.y - b.radius > V_HEIGHT) {
+                        this.balls.splice(i, 1);
+                    }
+                }
+
+                if (this.balls.length === 0) {
+                    this.lives--;
+                    this.updateLivesUI();
+                    AudioSys.loseLife();
+
+                    if (this.lives <= 0) {
+                        this.gameOver();
+                    } else {
+                        this.resetPaddleAndBall();
+                    }
+                }
+
+                if (this.getRemainingDestructibleBricksCount() === 0) {
+                    AudioSys.stageClear();
+                    if (this.stage < this.maxStages) {
+                        this.stage++;
+                        document.getElementById('stageText').innerText = String(this.stage).padStart(2, '0');
+                        this.stageDrops = 0;
+                        this.bricksBrokenThisStage = 0;
+                        this.generateBricks(this.stage);
+                        this.resetPaddleAndBall();
+                    } else {
+                        this.gameVictory();
+                    }
+                }
+            },
+
+            render() {
+                ctx.clearRect(0, 0, V_WIDTH, V_HEIGHT);
+
+                // 舒緩減壓的暮光海灣藍綠漸層背景 (柔和低反差)
+                const bgGrad = ctx.createLinearGradient(0, 0, 0, V_HEIGHT);
+                bgGrad.addColorStop(0, '#243242');
+                bgGrad.addColorStop(0.5, '#1e2b38');
+                bgGrad.addColorStop(1, '#18232e');
+                ctx.fillStyle = bgGrad;
+                ctx.fillRect(0, 0, V_WIDTH, V_HEIGHT);
+
+                // 極細微放鬆的溫潤網格底紋
+                ctx.strokeStyle = 'rgba(110, 231, 183, 0.04)';
+                ctx.lineWidth = 1;
+                for (let x = this.WALL_LEFT; x < this.WALL_RIGHT; x += 40) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, this.WALL_TOP);
+                    ctx.lineTo(x, V_HEIGHT);
+                    ctx.stroke();
+                }
+                for (let y = this.WALL_TOP; y < V_HEIGHT; y += 40) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.WALL_LEFT, y);
+                    ctx.lineTo(this.WALL_RIGHT, y);
+                    ctx.stroke();
+                }
+
+                // 繪製遊戲內部溫潤界線牆
+                this.renderBoundaryWalls();
+
+                this.bricks.forEach(br => {
+                    ctx.save();
+                    if (br.type === 'gold') {
+                        // 無法破壞的磚頭：沉靜圓潤的深板岩岩石質感 (溫和低反光)
+                        const slateGrad = ctx.createLinearGradient(br.x, br.y, br.x, br.y + br.height);
+                        slateGrad.addColorStop(0, '#4b596e');
+                        slateGrad.addColorStop(0.5, '#364354');
+                        slateGrad.addColorStop(1, '#25303d');
+                        ctx.fillStyle = slateGrad;
+                        ctx.beginPath();
+                        ctx.roundRect(br.x, br.y, br.width, br.height, 3);
+                        ctx.fill();
+
+                        // 沉穩霧面邊界
+                        ctx.strokeStyle = '#5a6b82';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+
+                        // 柔和圓潤四角固定小點
+                        ctx.fillStyle = '#7a8ba3';
+                        ctx.beginPath();
+                        ctx.arc(br.x + 4, br.y + 4, 1.2, 0, Math.PI * 2);
+                        ctx.arc(br.x + br.width - 4, br.y + 4, 1.2, 0, Math.PI * 2);
+                        ctx.arc(br.x + 4, br.y + br.height - 4, 1.2, 0, Math.PI * 2);
+                        ctx.arc(br.x + br.width - 4, br.y + br.height - 4, 1.2, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        // 中央低反差沉穩裝飾線
+                        ctx.fillStyle = '#202a36';
+                        ctx.fillRect(br.x + 10, br.y + br.height / 2 - 1, br.width - 20, 2);
+                    } else if (br.type === 'silver') {
+                        // 破壞多次的磚頭：舒緩放鬆的薰衣草紫丁香粉彩
+                        const lavenderGrad = ctx.createLinearGradient(br.x, br.y, br.x, br.y + br.height);
+                        lavenderGrad.addColorStop(0, '#ddd6fe');
+                        lavenderGrad.addColorStop(0.4, '#c4b5fd');
+                        lavenderGrad.addColorStop(0.8, '#a78bfa');
+                        lavenderGrad.addColorStop(1, '#8b5cf6');
+                        ctx.fillStyle = lavenderGrad;
+                        ctx.beginPath();
+                        ctx.roundRect(br.x, br.y, br.width, br.height, 3);
+                        ctx.fill();
+
+                        // 柔和高光倒角
+                        ctx.fillStyle = 'rgba(255,255,255,0.45)';
+                        ctx.fillRect(br.x + 1, br.y + 1, br.width - 2, 2);
+                        ctx.fillStyle = 'rgba(76, 29, 149, 0.25)';
+                        ctx.fillRect(br.x + 1, br.y + br.height - 3, br.width - 2, 2);
+
+                        // 溫和細緻裂痕效果
+                        if (br.hp < br.maxHp) {
+                            ctx.strokeStyle = '#4c1d95';
+                            ctx.lineWidth = 1.4;
+                            ctx.beginPath();
+                            ctx.moveTo(br.x + 8, br.y + 3);
+                            ctx.lineTo(br.x + br.width / 2 - 2, br.y + br.height / 2 + 1);
+                            ctx.lineTo(br.x + br.width - 10, br.y + br.height - 3);
+                            ctx.stroke();
+
+                            if (br.maxHp - br.hp >= 2) {
+                                ctx.beginPath();
+                                ctx.moveTo(br.x + br.width / 2 - 2, br.y + br.height / 2 + 1);
+                                ctx.lineTo(br.x + 12, br.y + br.height - 3);
+                                ctx.stroke();
+                            }
+                        }
+                    } else {
+                        // 普通磚塊：療癒清爽的鼠尾草薄荷天青 (Sage Mint & Calm Aqua)
+                        const mintGrad = ctx.createLinearGradient(br.x, br.y, br.x, br.y + br.height);
+                        mintGrad.addColorStop(0, '#99f6e4');
+                        mintGrad.addColorStop(0.4, '#5eead4');
+                        mintGrad.addColorStop(0.8, '#2dd4bf');
+                        mintGrad.addColorStop(1, '#14b8a6');
+                        ctx.fillStyle = mintGrad;
+                        ctx.beginPath();
+                        ctx.roundRect(br.x, br.y, br.width, br.height, 3);
+                        ctx.fill();
+
+                        // 柔潤微光倒角
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                        ctx.fillRect(br.x + 1, br.y + 1, br.width - 2, 2);
+
+                        ctx.fillStyle = 'rgba(19, 78, 74, 0.35)';
+                        ctx.fillRect(br.x + 1, br.y + br.height - 3, br.width - 2, 2);
+                    }
+                    ctx.restore();
+                });
+
+                this.capsules.forEach(cap => {
+                    ctx.save();
+                    ctx.fillStyle = cap.type.color;
+                    ctx.shadowColor = cap.type.color;
+                    ctx.shadowBlur = 6;
+                    
+                    ctx.beginPath();
+                    ctx.roundRect(cap.x, cap.y, cap.width, cap.height, 6);
+                    ctx.fill();
+
+                    ctx.fillStyle = cap.type.textColor || '#0f172a';
+                    ctx.font = 'bold 9px "Press Start 2P", sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(cap.type.char, cap.x + cap.width / 2, cap.y + cap.height / 2 + 1);
+                    ctx.restore();
+                });
+
+                this.particles.forEach(p => {
+                    ctx.save();
+                    ctx.globalAlpha = p.alpha;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+
+                // 溫潤珍珠白與青瓷柔光擋板
+                ctx.save();
+                const paddleGrad = ctx.createLinearGradient(this.paddle.x, this.paddle.y, this.paddle.x, this.paddle.y + this.paddle.height);
+                paddleGrad.addColorStop(0, '#ffffff');
+                paddleGrad.addColorStop(0.4, '#a7f3d0');
+                paddleGrad.addColorStop(1, '#34d399');
+
+                ctx.fillStyle = paddleGrad;
+                ctx.shadowColor = 'rgba(110, 231, 183, 0.35)';
+                ctx.shadowBlur = 8;
+                ctx.beginPath();
+                ctx.roundRect(this.paddle.x, this.paddle.y, this.paddle.width, this.paddle.height, 7);
+                ctx.fill();
+
+                // 擋板兩端柔美珊瑚粉飾圈
+                ctx.fillStyle = '#f472b6';
+                ctx.beginPath();
+                ctx.roundRect(this.paddle.x + 2, this.paddle.y + 2, 4, this.paddle.height - 4, 2);
+                ctx.roundRect(this.paddle.x + this.paddle.width - 6, this.paddle.y + 2, 4, this.paddle.height - 4, 2);
+                ctx.fill();
+                ctx.restore();
+
+                // 小球：溫和珍珠光白與柔光火球
+                this.balls.forEach(b => {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+
+                    if (b.isFireball) {
+                        ctx.fillStyle = '#fb923c';
+                        ctx.shadowColor = '#f97316';
+                        ctx.shadowBlur = 12;
+                    } else {
+                        ctx.fillStyle = '#f8fafc';
+                        ctx.shadowColor = '#6ee7b7';
+                        ctx.shadowBlur = 6;
+                    }
+                    ctx.fill();
+
+                    if (b.isFireball && !b.isStuck) {
+                        ctx.fillStyle = 'rgba(251, 146, 60, 0.35)';
+                        ctx.beginPath();
+                        ctx.arc(b.x - b.vx * 1.5, b.y - b.vy * 1.5, b.radius * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                });
+            },
+
+            // 繪製沉靜溫潤的界線牆
+            renderBoundaryWalls() {
+                const wt = this.WALL_THICKNESS;
+
+                ctx.save();
+                // 左側邊界牆
+                this.drawWallSegment(0, 0, wt, V_HEIGHT, 'v');
+                // 右側邊界牆
+                this.drawWallSegment(V_WIDTH - wt, 0, wt, V_HEIGHT, 'v');
+                // 頂部邊界牆
+                this.drawWallSegment(0, 0, V_WIDTH, wt, 'h');
+
+                // 邊界牆內側柔光導軌線 (柔和薄荷綠光暈，不刺眼)
+                ctx.strokeStyle = '#6ee7b7';
+                ctx.lineWidth = 1.5;
+                ctx.shadowColor = 'rgba(110, 231, 183, 0.5)';
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+                ctx.moveTo(wt, V_HEIGHT);
+                ctx.lineTo(wt, wt);
+                ctx.lineTo(V_WIDTH - wt, wt);
+                ctx.lineTo(V_WIDTH - wt, V_HEIGHT);
+                ctx.stroke();
+
+                // 左上與右上圓潤角塊
+                ctx.fillStyle = '#3a4a5e';
+                ctx.beginPath();
+                ctx.roundRect(2, 2, wt - 4, wt - 4, 4);
+                ctx.roundRect(V_WIDTH - wt + 2, 2, wt - 4, wt - 4, 4);
+                ctx.fill();
+                ctx.fillStyle = '#6ee7b7';
+                ctx.beginPath();
+                ctx.arc(wt / 2, wt / 2, 2.5, 0, Math.PI * 2);
+                ctx.arc(V_WIDTH - wt / 2, wt / 2, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            },
+
+            drawWallSegment(x, y, w, h, dir) {
+                // 溫潤陶瓦灰石板漸層
+                const grad = ctx.createLinearGradient(x, y, dir === 'v' ? x + w : x, dir === 'h' ? y + h : y);
+                grad.addColorStop(0, '#2e3d4f');
+                grad.addColorStop(0.5, '#3e5166');
+                grad.addColorStop(1, '#253342');
+                ctx.fillStyle = grad;
+                ctx.fillRect(x, y, w, h);
+
+                // 柔和微刻紋
+                ctx.fillStyle = 'rgba(110, 231, 183, 0.2)';
+                const segSize = 24;
+                if (dir === 'v') {
+                    for (let pos = 0; pos < h; pos += segSize) {
+                        ctx.fillRect(x + 2, y + pos, w - 4, 1.5);
+                    }
+                } else {
+                    for (let pos = 0; pos < w; pos += segSize) {
+                        ctx.fillRect(x + pos, y + 2, 1.5, h - 4);
+                    }
+                }
+            },
+
+            lastTime: 0,
+            loop(timestamp) {
+                if (!Game.lastTime) Game.lastTime = timestamp;
+                const delta = Math.min((timestamp - Game.lastTime) / 1000, 0.1);
+                Game.lastTime = timestamp;
+
+                Game.update(delta);
+                Game.render();
+
+                requestAnimationFrame(Game.loop);
+            },
+
+            start() {
+                this.score = 0;
+                this.stage = 1;
+                this.lives = 3;
+                this.stageDrops = 0;
+                this.bricksBrokenThisStage = 0;
+                this.updateScoreUI();
+                this.updateLivesUI();
+                document.getElementById('stageText').innerText = '01';
+
+                const pauseLabel = document.getElementById('pauseBtnLabel');
+                if (pauseLabel) pauseLabel.innerText = 'PAUSE / 暫停';
+
+                this.generateBricks(this.stage);
+                this.resetPaddleAndBall();
+                this.state = 'PLAYING';
+                document.getElementById('modalOverlay').classList.add('hidden');
+                AudioSys.init();
+            },
+
+            togglePause() {
+                const pauseLabel = document.getElementById('pauseBtnLabel');
+                if (this.state === 'PLAYING') {
+                    this.state = 'PAUSED';
+                    if (pauseLabel) pauseLabel.innerText = 'RESUME / 繼續';
+                    document.getElementById('modalTitle').innerText = 'PAUSED';
+                    document.getElementById('modalTitle').style.color = '#fef08a';
+                    document.getElementById('modalDesc').innerText = '遊戲已暫停，隨時準備繼續！';
+                    document.getElementById('modalActionBtn').innerText = '繼續遊戲 (RESUME)';
+                    document.getElementById('modalOverlay').classList.remove('hidden');
+                } else if (this.state === 'PAUSED') {
+                    this.state = 'PLAYING';
+                    if (pauseLabel) pauseLabel.innerText = 'PAUSE / 暫停';
+                    document.getElementById('modalOverlay').classList.add('hidden');
+                }
+            },
+
+            gameOver() {
+                this.state = 'GAMEOVER';
+                document.getElementById('modalTitle').innerText = 'GAME OVER';
+                document.getElementById('modalTitle').style.color = '#f87171';
+                document.getElementById('modalDesc').innerHTML = `最終得分：<span class="text-yellow-200 font-bold">${this.score}</span><br>深呼吸放鬆一下，隨時再來一局吧！`;
+                document.getElementById('modalActionBtn').innerText = '重新挑戰 (RETRY)';
+                document.getElementById('modalOverlay').classList.remove('hidden');
+            },
+
+            gameVictory() {
+                this.state = 'VICTORY';
+                document.getElementById('modalTitle').innerText = 'VICTORY !!';
+                document.getElementById('modalTitle').style.color = '#6ee7b7';
+                document.getElementById('modalDesc').innerHTML = `恭喜全關卡突破！<br>最終總分：<span class="text-yellow-200 font-bold">${this.score}</span><br>心境沉著，你是最棒的打磚塊大師！`;
+                document.getElementById('modalActionBtn').innerText = '再玩一次 (PLAY AGAIN)';
+                document.getElementById('modalOverlay').classList.remove('hidden');
+            }
+        };
+
+        let isPointerDown = false;
+        let lastPointerX = 0;
+
+        function getCanvasScaleX() {
+            const rect = canvas.getBoundingClientRect();
+            return V_WIDTH / rect.width;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (Game.state !== 'PLAYING') return;
+            isPointerDown = true;
+            lastPointerX = e.clientX;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isPointerDown || Game.state !== 'PLAYING') return;
+            const deltaX = (e.clientX - lastPointerX) * getCanvasScaleX();
+            lastPointerX = e.clientX;
+
+            Game.paddle.x += deltaX;
+            Game.paddle.x = Math.max(Game.WALL_LEFT + 2, Math.min(Game.WALL_RIGHT - Game.paddle.width - 2, Game.paddle.x));
+        });
+
+        window.addEventListener('mouseup', () => {
+            isPointerDown = false;
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (Game.state !== 'PLAYING') return;
+            if (e.touches.length > 0) {
+                isPointerDown = true;
+                lastPointerX = e.touches[0].clientX;
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isPointerDown || Game.state !== 'PLAYING') return;
+            if (e.touches.length > 0) {
+                const currentX = e.touches[0].clientX;
+                const deltaX = (currentX - lastPointerX) * getCanvasScaleX();
+                lastPointerX = currentX;
+
+                Game.paddle.x += deltaX;
+                Game.paddle.x = Math.max(Game.WALL_LEFT + 2, Math.min(Game.WALL_RIGHT - Game.paddle.width - 2, Game.paddle.x));
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => {
+            isPointerDown = false;
+        }, { passive: true });
+
+        canvas.addEventListener('touchcancel', () => {
+            isPointerDown = false;
+        }, { passive: true });
+
+        canvas.addEventListener('click', () => {
+            if (Game.state === 'PLAYING') {
+                Game.launchAllStuck();
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                Game.paddle.moveLeft = true;
+            } else if (e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                Game.paddle.moveRight = true;
+            } else if (e.code === 'Space') {
+                if (Game.state === 'PLAYING') {
+                    Game.launchAllStuck();
+                } else if (Game.state === 'START' || Game.state === 'GAMEOVER' || Game.state === 'VICTORY') {
+                    Game.start();
+                }
+                e.preventDefault();
+            } else if (e.key === 'p' || e.key === 'P') {
+                Game.togglePause();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                Game.paddle.moveLeft = false;
+            } else if (e.code === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                Game.paddle.moveRight = false;
+            }
+        });
+
+        const btnLeft = document.getElementById('mobileLeftBtn');
+        const btnRight = document.getElementById('mobileRightBtn');
+        const btnLaunch = document.getElementById('mobileLaunchBtn');
+        const btnPause = document.getElementById('pauseGameBtn');
+
+        const bindPress = (el, onStart, onEnd) => {
+            el.addEventListener('mousedown', onStart);
+            el.addEventListener('mouseup', onEnd);
+            el.addEventListener('mouseleave', onEnd);
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); onStart(); });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); onEnd(); });
+        };
+
+        bindPress(btnLeft, () => { Game.paddle.moveLeft = true; }, () => { Game.paddle.moveLeft = false; });
+        bindPress(btnRight, () => { Game.paddle.moveRight = true; }, () => { Game.paddle.moveRight = false; });
+        btnLaunch.addEventListener('click', () => { Game.launchAllStuck(); });
+
+        if (btnPause) {
+            btnPause.addEventListener('click', () => Game.togglePause());
+        }
+
+        document.getElementById('soundToggleBtn').addEventListener('click', () => {
+            AudioSys.enabled = !AudioSys.enabled;
+            document.getElementById('soundToggleBtn').innerText = AudioSys.enabled ? '🔊 音效: 開啟' : '🔇 音效: 關閉';
+            if (AudioSys.enabled) AudioSys.init();
+        });
+
+        document.getElementById('modalActionBtn').addEventListener('click', () => {
+            if (Game.state === 'PAUSED') {
+                Game.togglePause();
+            } else {
+                Game.start();
+            }
+        });
+
+        window.addEventListener('resize', () => Game.resize());
+        window.onload = () => {
+            Game.resize();
+            Game.generateBricks(1);
+            Game.resetPaddleAndBall();
+            Game.render();
+            requestAnimationFrame(Game.loop);
+        };
+    </script>
+</body>
+</html>
